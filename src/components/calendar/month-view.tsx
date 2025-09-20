@@ -33,7 +33,6 @@ interface MonthViewProps {
   currentDate: Date
   events: CalendarEvent[]
   onEventSelect: (event: CalendarEvent) => void
-  onEventCreate: (startTime: Date) => void
 }
 
 export function MonthView({

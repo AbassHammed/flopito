@@ -12,6 +12,8 @@ export interface CalendarEvent {
   title: string
   description: string
   location: string
+  staff?: string
+  color?: EventColor
 }
 
 export type EventColor = 'blue' | 'orange' | 'violet' | 'rose' | 'emerald'

@@ -31,7 +31,6 @@ interface WeekViewProps {
   currentDate: Date
   events: CalendarEvent[]
   onEventSelect: (event: CalendarEvent) => void
-  onEventCreate: (startTime: Date) => void
 }
 
 interface PositionedEvent {
