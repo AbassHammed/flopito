@@ -12,3 +12,8 @@ export interface Teacher {
 }
 
 export type TeachersResponse = Teacher[]
+
+interface Room {
+  id: number
+  name: string
+}
