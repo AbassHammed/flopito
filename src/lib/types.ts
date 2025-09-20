@@ -1,63 +1,62 @@
-
-export const DAYS = ['m', 'tu', 'w', 'th', 'f'];
+export const DAYS = ['m', 'tu', 'w', 'th', 'f']
 export const DAY_NAMES_MAP = new Map<string, string>([
   ['m', 'Lundi'],
   ['tu', 'Mardi'],
   ['w', 'Mercredi'],
   ['th', 'Jeudi'],
   ['f', 'Vendredi'],
-]);
+])
 
 export interface Course {
-  id: number;
-  room: Room;
-  start_time: number;
-  day: string;
-  course: CourseDetails;
-  tutor: string | null;
-  id_visio: string | null;
-  number: number;
-  duration?: number;
+  id: number
+  room: Room
+  start_time: number
+  day: string
+  course: CourseDetails
+  tutor: string | null
+  id_visio: string | null
+  number: number
+  duration?: number
 }
 
 export interface Room {
-  id: number;
-  name: string;
+  id: number
+  name: string
 }
 
-type RoomType = 'TD' | 'TP' | 'AMPHI' | 'Gd-Amphi';
+type RoomType = 'TD' | 'TP' | 'AMPHI' | 'Gd-Amphi'
 
 export interface CourseDetails {
-  id: number;
-  type: string;
-  room_type: RoomType;
-  week: number;
-  year: number;
+  id: number
+  type: string
+  room_type: RoomType
+  week: number
+  year: number
   groups: {
-    id: number;
-    train_prog: string;
-    name: string;
-    is_structural: boolean;
-  }[];
-  module: Module;
-  pay_module: null;
-  is_graded: boolean;
+    id: number
+    train_prog: string
+    name: string
+    is_structural: boolean
+  }[]
+  module: Module
+  pay_module: null
+  is_graded: boolean
 }
 
 export interface Module {
-  name: string;
-  abbrev: string;
+  name: string
+  abbrev: string
   display: {
-    color_bg: string;
-    color_txt: string;
-  };
+    color_bg: string
+    color_txt: string
+  }
 }
 
-export type Year = 'BUT1' | 'BUT2I' | 'BUT3I';
+export type Year = 'BUT1' | 'BUT2I' | 'BUT3I'
 
 export interface Group {
-  name: string;
-  year: Year;
+  name: string
+  year: Year
 }
 
 export const YEAR_GROUPS: Record<Year, Group[]> = {
@@ -83,4 +82,4 @@ export const YEAR_GROUPS: Record<Year, Group[]> = {
     { name: 'DV2', year: 'BUT3I' },
     { name: 'RE', year: 'BUT3I' },
   ],
-};
+}

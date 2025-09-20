@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { QueryClient } from '@tanstack/react-query'
+
 import { ResponseError } from 'types/base'
 
 let queryClient: QueryClient | undefined
@@ -23,11 +24,9 @@ function getQueryClient() {
               return false
             }
 
-            if (failureCount < 3) {
-              return true
-            }
+            return failureCount < 3;
 
-            return false
+
           },
         },
       },
