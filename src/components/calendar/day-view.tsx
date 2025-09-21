@@ -15,7 +15,7 @@ import {
 
 import { EndHour, StartHour, WeekCellsHeight } from './lib/constants'
 import { isMultiDayEvent } from './lib/utils'
-import { cn } from '@/lib/utils'
+import { cn } from 'lib/utils'
 import { useCurrentTimeIndicator } from './hooks/use-current-time-indicator'
 
 import { Cell } from './cell'

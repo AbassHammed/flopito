@@ -24,7 +24,7 @@ import {
   EventHeight,
   WeekCellsHeight,
 } from './lib/constants'
-import { cn } from '@/lib/utils'
+import { cn } from 'lib/utils'
 
 import ThemeToggle from '~/theme-toggle'
 import { Button } from '~/ui/button'
