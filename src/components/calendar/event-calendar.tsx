@@ -12,18 +12,21 @@ import {
   subMonths,
   subWeeks,
 } from 'date-fns'
+import { fr } from 'date-fns/locale'
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
 } from 'lucide-react'
 
+import { PromoGroups } from 'types/base'
 import {
   AgendaDaysToShow,
   EventGap,
   EventHeight,
   WeekCellsHeight,
 } from './lib/constants'
+import { JSONEventParser } from 'lib/event-parser'
 import { cn } from 'lib/utils'
 
 import ThemeToggle from '~/theme-toggle'
@@ -32,7 +35,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuPortal,
   DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '~/ui/dropdown-menu'
 
@@ -45,13 +52,15 @@ import { CalendarEvent, CalendarView } from './types'
 import { WeekView } from './week-view'
 
 export interface EventCalendarProps {
-  events?: CalendarEvent[]
+  events: CalendarEvent[]
+  groups: PromoGroups[]
   className?: string
   initialView?: CalendarView
 }
 
 export function EventCalendar({
   events = [],
+  groups = [],
   className,
   initialView = 'month',
 }: EventCalendarProps) {
@@ -60,6 +69,7 @@ export function EventCalendar({
   const [view, setView] = useState<CalendarView>(initialView)
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [eventFilter, setEventFilter] = useState<string>('BUT1')
 
   // Add keyboard shortcuts for view switching
   useEffect(() => {
@@ -98,6 +108,11 @@ export function EventCalendar({
     }
   }, [isEventDialogOpen])
 
+  const filteredEvents = useMemo(() => {
+    if (!eventFilter) return events
+    return JSONEventParser.filter(events, eventFilter)
+  }, [events, eventFilter])
+
   const handlePrevious = () => {
     if (view === 'month') {
       setCurrentDate(subMonths(currentDate, 1))
@@ -129,17 +144,16 @@ export function EventCalendar({
   }
 
   const handleEventSelect = (event: CalendarEvent) => {
-    console.log('Event selected:', event) // Debug log
     setSelectedEvent(event)
     setIsEventDialogOpen(true)
   }
 
   const viewTitle = useMemo(() => {
     if (view === 'month') {
-      return format(currentDate, 'MMMM yyyy')
+      return format(currentDate, 'MMMM yyyy', { locale: fr })
     } else if (view === 'week') {
-      const start = startOfWeek(currentDate, { weekStartsOn: 0 })
-      const end = endOfWeek(currentDate, { weekStartsOn: 0 })
+      const start = startOfWeek(currentDate, { weekStartsOn: 0, locale: fr })
+      const end = endOfWeek(currentDate, { weekStartsOn: 0, locale: fr })
       if (isSameMonth(start, end)) {
         return format(start, 'MMMM yyyy')
       } else {
@@ -149,13 +163,13 @@ export function EventCalendar({
       return (
         <>
           <span className="min-sm:hidden" aria-hidden="true">
-            {format(currentDate, 'MMM d, yyyy')}
+            {format(currentDate, 'MMM d, yyyy', { locale: fr })}
           </span>
           <span className="max-sm:hidden min-md:hidden" aria-hidden="true">
-            {format(currentDate, 'MMMM d, yyyy')}
+            {format(currentDate, 'MMMM d, yyyy', { locale: fr })}
           </span>
           <span className="max-md:hidden">
-            {format(currentDate, 'EEE MMMM d, yyyy')}
+            {format(currentDate, 'EEE MMMM d, yyyy', { locale: fr })}
           </span>
         </>
       )
@@ -165,12 +179,12 @@ export function EventCalendar({
       const end = addDays(currentDate, AgendaDaysToShow - 1)
 
       if (isSameMonth(start, end)) {
-        return format(start, 'MMMM yyyy')
+        return format(start, 'MMMM yyyy', { locale: fr })
       } else {
-        return `${format(start, 'MMM')} - ${format(end, 'MMM yyyy')}`
+        return `${format(start, 'MMM', { locale: fr })} - ${format(end, 'MMM yyyy', { locale: fr })}`
       }
     } else {
-      return format(currentDate, 'MMMM yyyy')
+      return format(currentDate, 'MMMM yyyy', { locale: fr })
     }
   }, [currentDate, view])
 
@@ -221,20 +235,46 @@ export function EventCalendar({
               </Button>
             </div>
             <Button className="max-sm:h-8 max-sm:px-2.5!" onClick={handleToday}>
-              Today
+              Aujourd&apos;hui
             </Button>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <Button
-              variant="outline"
-              className="max-sm:h-8 max-sm:px-2.5!"
-              onClick={() => {
-                setSelectedEvent(null) // Ensure we're creating a new event
-                setIsEventDialogOpen(true)
-              }}
-            >
-              New Event
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="gap-1.5 max-sm:h-8 max-sm:px-2! max-sm:gap-1"
+                >
+                  {eventFilter}
+                  <ChevronDownIcon
+                    className="-me-1 opacity-60"
+                    size={16}
+                    aria-hidden="true"
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-32">
+                {groups.map((group) => (
+                  <DropdownMenuSub key={group.promo}>
+                    <DropdownMenuSubTrigger key={group.promo}>
+                      {group.promo}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuPortal>
+                      <DropdownMenuSubContent>
+                        {group.groups.map((subgroup) => (
+                          <DropdownMenuItem
+                            key={subgroup.id}
+                            onClick={() => setEventFilter(subgroup.name)}
+                          >
+                            {subgroup.name}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuSub>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -251,13 +291,13 @@ export function EventCalendar({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-32">
                 <DropdownMenuItem onClick={() => setView('month')}>
-                  Month <DropdownMenuShortcut>M</DropdownMenuShortcut>
+                  Mois <DropdownMenuShortcut>M</DropdownMenuShortcut>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setView('week')}>
-                  Week <DropdownMenuShortcut>W</DropdownMenuShortcut>
+                  Semaine <DropdownMenuShortcut>W</DropdownMenuShortcut>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setView('day')}>
-                  Day <DropdownMenuShortcut>D</DropdownMenuShortcut>
+                  Jour <DropdownMenuShortcut>D</DropdownMenuShortcut>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setView('agenda')}>
                   Agenda <DropdownMenuShortcut>A</DropdownMenuShortcut>
@@ -273,28 +313,28 @@ export function EventCalendar({
         {view === 'month' && (
           <MonthView
             currentDate={currentDate}
-            events={events}
+            events={filteredEvents}
             onEventSelect={handleEventSelect}
           />
         )}
         {view === 'week' && (
           <WeekView
             currentDate={currentDate}
-            events={events}
+            events={filteredEvents}
             onEventSelect={handleEventSelect}
           />
         )}
         {view === 'day' && (
           <DayView
             currentDate={currentDate}
-            events={events}
+            events={filteredEvents}
             onEventSelect={handleEventSelect}
           />
         )}
         {view === 'agenda' && (
           <AgendaView
             currentDate={currentDate}
-            events={events}
+            events={filteredEvents}
             onEventSelect={handleEventSelect}
           />
         )}

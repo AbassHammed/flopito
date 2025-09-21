@@ -18,7 +18,7 @@ interface FlopRoom {
   name: string
 }
 
-interface FlopGroup {
+export interface FlopGroup {
   id: number
   train_prog: string
   name: string

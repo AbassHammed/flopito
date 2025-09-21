@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import '../styles/globals.css'
 
 import { SpeedInsights } from '@vercel/speed-insights/next'
+import ClientProvider from 'providers/query-client'
 import { ThemeProvider } from 'providers/theme-provider'
 
 import { CalendarProvider } from '~/calendar/calendar-context'
@@ -40,7 +41,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <CalendarProvider>{children}</CalendarProvider>
+          <ClientProvider>
+            <CalendarProvider>{children}</CalendarProvider>
+          </ClientProvider>
         </ThemeProvider>
         <SpeedInsights />
       </body>

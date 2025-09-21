@@ -1,16 +1,16 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query'
 import { getWeek } from 'date-fns'
 
-import { TeachersResponse } from 'types/api'
+import { FlopEvent } from 'types/api'
 import { ResponseError } from 'types/base'
 
 import { get, handleError } from './fetcher'
 
-async function getTeachers(
+async function getCourses(
   { dept, week, year }: { dept: string; week: number; year: number },
   signal?: AbortSignal
 ) {
-  const { data, error } = await get('/user/tutor', {
+  const { data, error } = await get('/fetch/scheduledcourses', {
     params: {
       query: { dept, week, year },
     },
@@ -19,10 +19,10 @@ async function getTeachers(
 
   if (error) handleError(error)
 
-  return data as unknown as TeachersResponse
+  return data as unknown as FlopEvent[]
 }
 
-export const useTeachersQuery = <TData = TeachersResponse>(
+export const useCoursesQuery = <TData = FlopEvent[]>(
   {
     dept = 'INFO',
     week = getWeek(new Date()),
@@ -33,22 +33,22 @@ export const useTeachersQuery = <TData = TeachersResponse>(
     ...options
   }: Omit<
     UseQueryOptions<
-      TeachersResponse,
+      FlopEvent[],
       ResponseError,
       TData,
-      ['tutors', string, number, number]
+      ['scheduledcourses', string, number, number]
     >,
     'queryKey' | 'queryFn'
   > = {}
 ) =>
   useQuery<
-    TeachersResponse,
+    FlopEvent[],
     ResponseError,
     TData,
-    ['tutors', string, number, number]
+    ['scheduledcourses', string, number, number]
   >({
-    queryKey: ['tutors', dept, week, year],
-    queryFn: ({ signal }) => getTeachers({ dept, week, year }, signal),
+    queryKey: ['scheduledcourses', dept, week, year],
+    queryFn: ({ signal }) => getCourses({ dept, week, year }, signal),
     enabled,
     ...options,
     refetchOnWindowFocus: false,

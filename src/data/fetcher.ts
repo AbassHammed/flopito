@@ -1,6 +1,6 @@
 import createClient from 'openapi-fetch'
 
-import { ResponseError } from '@/types/base'
+import { ResponseError } from 'types/base'
 import { API_URL } from 'lib/constants'
 
 const DEFAULT_HEADERS = {

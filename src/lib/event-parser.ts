@@ -1,6 +1,7 @@
 import { addMinutes, setHours, setMinutes } from 'date-fns'
 
 import { FlopEvent, ICSEvent } from 'types/api'
+import { PromoGroups } from 'types/base'
 
 import { CalendarEvent, EventColor } from '~/calendar/types'
 
@@ -44,7 +45,24 @@ export class JSONEventParser {
       location: event.room.name,
       staff: event.tutor,
       color: getClosestColor(event.course.module.display.color_bg),
+      groups: event.course.groups,
     }
+  }
+
+  static filter(src: CalendarEvent[], fg?: string): CalendarEvent[] {
+    let events = src
+    if (fg) {
+      events = events.filter((event) => {
+        if (!event.groups || event.groups.length === 0) return false
+
+        return event.groups.some((group) => {
+          const fn = `${group.train_prog} ${group.name}`
+          return fg === fn || fg === group.name || fg === group.train_prog
+        })
+      })
+    }
+
+    return events
   }
 
   /**
@@ -64,6 +82,82 @@ export class JSONEventParser {
       console.error('Error parsing JSON events:', error)
       throw new Error(
         `Failed to parse JSON events: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
+    }
+  }
+
+  /**
+   * Extracts all unique groups organized by promo from the data
+   */
+  static extractGroups(jsonData: string | FlopEvent[]): PromoGroups[] {
+    try {
+      const events: FlopEvent[] =
+        typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
+
+      if (!Array.isArray(events)) {
+        throw new Error('Expected an array of events')
+      }
+
+      // Use a Map to collect unique groups by promo
+      const promoMap = new Map<
+        string,
+        Map<string, { id: number; name: string }>
+      >()
+
+      events.forEach((event) => {
+        event.course.groups.forEach((group) => {
+          if (!promoMap.has(group.train_prog)) {
+            promoMap.set(group.train_prog, new Map())
+          }
+
+          const groupsForPromo = promoMap.get(group.train_prog)!
+          if (!groupsForPromo.has(group.name)) {
+            groupsForPromo.set(group.name, {
+              id: group.id,
+              name: group.name,
+            })
+          }
+        })
+      })
+
+      const result: PromoGroups[] = []
+
+      // Sort promos (BUT1, BUT2, BUT3, LP, etc.)
+      const sortedPromos = Array.from(promoMap.keys()).sort((a, b) => {
+        // Special sorting for BUT promos
+        if (a.startsWith('BUT') && b.startsWith('BUT')) {
+          return a.localeCompare(b)
+        }
+        if (a.startsWith('BUT')) return -1
+        if (b.startsWith('BUT')) return 1
+        return a.localeCompare(b)
+      })
+
+      sortedPromos.forEach((promo) => {
+        const groups = promoMap.get(promo)!
+        const sortedGroups = Array.from(groups.values()).sort((a, b) => {
+          // Sort groups naturally (A, B, C... or G1, G2, G3...)
+          return a.name.localeCompare(b.name, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+          })
+        })
+
+        result.push({
+          promo,
+          groups: sortedGroups.map((g) => ({
+            id: g.id,
+            name: g.name,
+            fullName: `${promo} ${g.name}`,
+          })),
+        })
+      })
+
+      return result
+    } catch (error) {
+      console.error('Error extracting groups:', error)
+      throw new Error(
+        `Failed to extract groups: ${error instanceof Error ? error.message : 'Unknown error'}`
       )
     }
   }

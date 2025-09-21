@@ -2,7 +2,7 @@
 
 import { format, isSameDay } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Calendar, Clock, MapPin, Users } from 'lucide-react'
+import { Calendar, Clock, FileText, MapPin, Tag, Users } from 'lucide-react'
 
 import { Badge } from '~/ui/badge'
 import { Button } from '~/ui/button'
@@ -45,10 +45,24 @@ export function EventDialog({ event, isOpen, onClose }: EventDialogProps) {
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{event?.id ? 'Edit Event' : 'Create Event'}</DialogTitle>
+          <DialogTitle>{event.title}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="space-y-4">
+            {event.description && (
+              <div className="flex items-start gap-3">
+                <FileText className="h-5 w-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm text-muted-foreground">
+                    Description
+                  </p>
+                  <p className="text-sm break-words whitespace-pre-wrap">
+                    {event.description}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-start gap-3">
               <Calendar className="h-5 w-5 mt-0.5 text-muted-foreground flex-shrink-0" />
               <div className="min-w-0 flex-1">
@@ -61,7 +75,7 @@ export function EventDialog({ event, isOpen, onClose }: EventDialogProps) {
                 {event?.allDay && (
                   <Badge variant="outline" className="mt-1">
                     <Clock className="h-3 w-3 mr-1" />
-                    All Day
+                    Toute la journée
                   </Badge>
                 )}
               </div>
@@ -87,6 +101,33 @@ export function EventDialog({ event, isOpen, onClose }: EventDialogProps) {
                     Staff
                   </p>
                   <p className="text-sm break-words">{event.staff}</p>
+                </div>
+              </div>
+            )}
+
+            {event.groups && event.groups.length > 0 && (
+              <div className="flex items-start gap-3">
+                <Tag className="h-5 w-5 mt-0.5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm text-muted-foreground">
+                    Groups
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {event.groups.map((group) => (
+                      <Badge
+                        key={group.id}
+                        variant={group.is_structural ? 'default' : 'secondary'}
+                        className="text-xs"
+                      >
+                        {group.name}
+                        {group.train_prog && (
+                          <span className="ml-1 opacity-70">
+                            ({group.train_prog})
+                          </span>
+                        )}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

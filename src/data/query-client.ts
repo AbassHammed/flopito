@@ -1,3 +1,5 @@
+'use client'
+
 import { useState } from 'react'
 import { QueryClient } from '@tanstack/react-query'
 
@@ -24,9 +26,7 @@ function getQueryClient() {
               return false
             }
 
-            return failureCount < 3;
-
-
+            return failureCount < 3
           },
         },
       },

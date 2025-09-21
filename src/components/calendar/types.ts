@@ -1,3 +1,5 @@
+import { FlopGroup } from 'types/api'
+
 export type CalendarView = 'month' | 'week' | 'day' | 'agenda'
 
 export interface DateRange {
@@ -14,6 +16,7 @@ export interface CalendarEvent {
   location: string
   staff?: string
   color?: EventColor
+  groups?: FlopGroup[]
 }
 
 export type EventColor = 'blue' | 'orange' | 'violet' | 'rose' | 'emerald'
