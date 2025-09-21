@@ -58,14 +58,3 @@ export interface FlopEvent {
   id_visio: null | string
   number: number
 }
-
-export interface ICSEvent {
-  uid: string
-  dtstart: string
-  dtend: string
-  summary: string
-  description?: string
-  location?: string
-  sequence?: string
-  dtstamp?: string
-}

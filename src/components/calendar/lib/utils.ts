@@ -150,12 +150,3 @@ export function getAgendaEventsForDay(
         new Date(b.dateRange.start).getTime()
     )
 }
-
-/**
- * Add hours to a date
- */
-export function addHoursToDate(date: Date, hours: number): Date {
-  const result = new Date(date)
-  result.setHours(result.getHours() + hours)
-  return result
-}
