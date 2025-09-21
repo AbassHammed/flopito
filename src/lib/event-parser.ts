@@ -1,9 +1,9 @@
 import { addMinutes, setHours, setMinutes } from 'date-fns'
 
-import { FlopEvent, ICSEvent } from 'types/api'
-import { PromoGroups } from 'types/base'
+import { FlopEvent } from 'types/api'
+import { GroupHierarchy, PromoGroups } from 'types/base'
 
-import { CalendarEvent, EventColor } from '~/calendar/types'
+import { CalendarEvent } from '~/calendar/types'
 
 import { extractDurationFromType, getClosestColor, getDayDate } from './utils'
 
@@ -49,15 +49,47 @@ export class JSONEventParser {
     }
   }
 
-  static filter(src: CalendarEvent[], fg?: string): CalendarEvent[] {
+  static filter(
+    src: CalendarEvent[],
+    filterGroups?: string[]
+  ): CalendarEvent[] {
+    const groups = this.extractGroups(src)
+    const allparentGroups = new Set<string>()
+
+    filterGroups?.forEach((group) => {
+      const parents = this.getParentGroups(group, groups)
+      parents.forEach((p) => allparentGroups.add(p))
+    })
+
+    filterGroups = Array.from(allparentGroups)
+
     let events = src
-    if (fg) {
+    if (filterGroups && filterGroups.length > 0) {
       events = events.filter((event) => {
         if (!event.groups || event.groups.length === 0) return false
 
-        return event.groups.some((group) => {
-          const fn = `${group.train_prog} ${group.name}`
-          return fg === fn || fg === group.name || fg === group.train_prog
+        return filterGroups.some((fg) => {
+          return event.groups!.some((group) => {
+            const fn = `${group.train_prog} ${group.name}`
+            if (fg === fn || fg === group.name || fg === group.train_prog)
+              return true
+
+            const filterParts = fg.split(' ')
+            const eventParts = fn.split(' ')
+
+            if (filterParts[0] !== eventParts[0]) return false
+
+            if (filterParts.length > 1 && eventParts.length > 1) {
+              const filterGroupName = filterParts[1]
+              const eventGroupName = eventParts[1]
+
+              return this.isSubgroupOf(
+                eventGroupName,
+                filterGroupName,
+                group.train_prog
+              )
+            }
+          })
         })
       })
     }
@@ -87,44 +119,84 @@ export class JSONEventParser {
   }
 
   /**
-   * Extracts all unique groups organized by promo from the data
+   * Checks if groupA is a subgroup of groupB
    */
-  static extractGroups(jsonData: string | FlopEvent[]): PromoGroups[] {
+  private static isSubgroupOf(
+    groupA: string,
+    groupB: string,
+    promo: string
+  ): boolean {
+    // Handle promo-level groups (e.g., BUT3I includes all BUT3 subgroups)
+    if (groupB.includes(promo)) return true
+
+    // Handle exact match
+    if (groupA === groupB) return true
+
+    // Handle subgroup relationships
+    // DV1.1 -> DV1 -> DV
+    // A1 -> A
+    // G1 doesn't have parent (it's a direct group)
+
+    // Check if groupA starts with groupB (e.g., DV1.1 starts with DV1, DV1 starts with DV)
+    if (groupA.startsWith(groupB)) {
+      // Make sure it's a proper subgroup (not DV10 matching DV1)
+      const remainder = groupA.substring(groupB.length)
+      return (
+        remainder === '' || remainder.startsWith('.') || /^\d/.test(remainder)
+      )
+    }
+
+    // Handle special cases for TP groups (e.g., A1, A2 are subgroups of A)
+    const baseGroupA = groupA.replace(/[.\d]+$/, '') // Remove trailing numbers and dots
+    const baseGroupB = groupB.replace(/[.\d]+$/, '')
+
+    if (baseGroupA === baseGroupB && groupA !== groupB) {
+      // Check if A is actually a parent of A1 (A has no numbers, A1 has numbers)
+      return groupA.length > groupB.length
+    }
+
+    // Check multi-level hierarchy (DV1.1 -> DV)
+    if (baseGroupA.startsWith(baseGroupB) && baseGroupA !== baseGroupB) {
+      return true
+    }
+
+    return false
+  }
+
+  /**
+   * Extracts all unique groups organized hierarchically by promo from the data
+   */
+  static extractGroups(events: CalendarEvent[]): PromoGroups[] {
     try {
-      const events: FlopEvent[] =
-        typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
-
-      if (!Array.isArray(events)) {
-        throw new Error('Expected an array of events')
-      }
-
-      // Use a Map to collect unique groups by promo
+      // Collect all unique groups by promo
       const promoMap = new Map<
         string,
-        Map<string, { id: number; name: string }>
+        Map<string, { id: number; name: string; train_prog: string }>
       >()
 
       events.forEach((event) => {
-        event.course.groups.forEach((group) => {
-          if (!promoMap.has(group.train_prog)) {
-            promoMap.set(group.train_prog, new Map())
+        event.groups?.forEach((group) => {
+          const promo = group.train_prog
+          if (!promoMap.has(promo)) {
+            promoMap.set(promo, new Map())
           }
 
-          const groupsForPromo = promoMap.get(group.train_prog)!
-          if (!groupsForPromo.has(group.name)) {
-            groupsForPromo.set(group.name, {
+          const groupsForPromo = promoMap.get(promo)!
+          const key = group.name
+          if (!groupsForPromo.has(key)) {
+            groupsForPromo.set(key, {
               id: group.id,
               name: group.name,
+              train_prog: group.train_prog,
             })
           }
         })
       })
 
+      // Build hierarchical structure
       const result: PromoGroups[] = []
 
-      // Sort promos (BUT1, BUT2, BUT3, LP, etc.)
       const sortedPromos = Array.from(promoMap.keys()).sort((a, b) => {
-        // Special sorting for BUT promos
         if (a.startsWith('BUT') && b.startsWith('BUT')) {
           return a.localeCompare(b)
         }
@@ -134,23 +206,9 @@ export class JSONEventParser {
       })
 
       sortedPromos.forEach((promo) => {
-        const groups = promoMap.get(promo)!
-        const sortedGroups = Array.from(groups.values()).sort((a, b) => {
-          // Sort groups naturally (A, B, C... or G1, G2, G3...)
-          return a.name.localeCompare(b.name, undefined, {
-            numeric: true,
-            sensitivity: 'base',
-          })
-        })
-
-        result.push({
-          promo,
-          groups: sortedGroups.map((g) => ({
-            id: g.id,
-            name: g.name,
-            fullName: `${promo} ${g.name}`,
-          })),
-        })
+        const groups = Array.from(promoMap.get(promo)!.values())
+        const hierarchy = this.buildHierarchy(promo, groups)
+        result.push({ promo, hierarchy })
       })
 
       return result
@@ -161,169 +219,208 @@ export class JSONEventParser {
       )
     }
   }
-}
 
-export class ICSEventParser {
   /**
-   * Parses ICS datetime string to Date object
+   * Builds a hierarchical structure from flat group list
    */
-  private static parseICSDate(dateStr: string): Date {
-    // Handle both formats: 20250609T050000Z and 20250609T050000
-    const cleanStr = dateStr.replace('Z', '')
-    const year = parseInt(cleanStr.substr(0, 4), 10)
-    const month = parseInt(cleanStr.substr(4, 2), 10) - 1
-    const day = parseInt(cleanStr.substr(6, 2), 10)
-    const hour = parseInt(cleanStr.substr(9, 2), 10)
-    const minute = parseInt(cleanStr.substr(11, 2), 10)
-    const second = parseInt(cleanStr.substr(13, 2), 10)
-
-    // If Z is present, it's UTC time
-    if (dateStr.includes('Z')) {
-      return new Date(Date.UTC(year, month, day, hour, minute, second))
+  private static buildHierarchy(
+    promo: string,
+    groups: Array<{ id: number; name: string; train_prog: string }>
+  ): GroupHierarchy {
+    const root: GroupHierarchy = {
+      id: 0,
+      name: promo,
+      fullName: promo,
+      level: 'promo',
+      children: [],
     }
 
-    return new Date(year, month, day, hour, minute, second)
+    // Find promo-level group (like BUT3I, BUT2I, BUT1)
+    const promoGroup = groups.find(
+      (g) => g.name === promo || g.name.includes(promo)
+    )
+    if (promoGroup) {
+      root.id = promoGroup.id
+      root.name = promoGroup.name
+    }
+
+    // Sort groups for proper hierarchy building
+    const sortedGroups = groups
+      .filter((g) => g.name !== promo && !g.name.includes(promo))
+      .sort((a, b) => {
+        // Sort by complexity (less complex first)
+        const aComplexity = (a.name.match(/[.\d]/g) || []).length
+        const bComplexity = (b.name.match(/[.\d]/g) || []).length
+        if (aComplexity !== bComplexity) return aComplexity - bComplexity
+        return a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        })
+      })
+
+    // Build the hierarchy
+    const addedGroups = new Set<string>()
+
+    sortedGroups.forEach((group) => {
+      if (addedGroups.has(group.name)) return
+
+      const parts = group.name.split('.')
+      let level: 'specialization' | 'group' | 'subgroup' = 'group'
+
+      // Determine level based on naming pattern
+      if (parts.length > 1 || /\d\.\d/.test(group.name)) {
+        level = 'subgroup'
+      } else if (['DV', 'RE', 'BD'].includes(group.name)) {
+        level = 'specialization'
+      } else if (/^[A-Z]\d?$/.test(group.name) || /^G\d$/.test(group.name)) {
+        level = group.name.length === 1 ? 'group' : 'subgroup'
+      }
+
+      const node: GroupHierarchy = {
+        id: group.id,
+        name: group.name,
+        fullName: `${promo} ${group.name}`,
+        level,
+        children: [],
+      }
+
+      // Find parent
+      let parent = root
+
+      // For subgroups, find their parent
+      if (level === 'subgroup') {
+        // Try to find direct parent (DV1 for DV1.1, A for A1)
+        const possibleParents = [
+          group.name.substring(0, group.name.lastIndexOf('.')), // DV1.1 -> DV1
+          group.name.replace(/\.\d+$/, ''), // DV1.1 -> DV1
+          group.name.replace(/\d+$/, ''), // A1 -> A, DV1 -> DV
+          group.name.replace(/\d+\.\d+$/, ''), // DV1.1 -> DV
+        ].filter((p) => p && p !== group.name)
+
+        for (const parentName of possibleParents) {
+          const existingParent = this.findInHierarchy(root, parentName)
+          if (existingParent) {
+            parent = existingParent
+            break
+          }
+        }
+      }
+
+      // Add to parent's children
+      if (!parent.children) parent.children = []
+      parent.children.push(node)
+      addedGroups.add(group.name)
+    })
+
+    // Sort children at each level
+    this.sortHierarchy(root)
+
+    return root
   }
 
   /**
-   * Unfolds ICS content (handles line continuations)
+   * Finds a node in the hierarchy by name
    */
-  private static unfoldLines(content: string): string {
-    return content.replace(/\r?\n[ \t]/g, '')
-  }
-
-  /**
-   * Extracts value from ICS property line
-   */
-  private static extractValue(line: string): string {
-    const colonIndex = line.indexOf(':')
-    if (colonIndex === -1) return ''
-    return line.substring(colonIndex + 1).trim()
-  }
-
-  /**
-   * Parses a single VEVENT block
-   */
-  private static parseVEvent(eventBlock: string): ICSEvent | null {
-    const lines = eventBlock.split(/\r?\n/).filter((line) => line.trim())
-    const event: Partial<ICSEvent> = {}
-
-    for (const line of lines) {
-      if (line.startsWith('UID:')) {
-        event.uid = this.extractValue(line)
-      } else if (line.startsWith('DTSTART:') || line.startsWith('DTSTART;')) {
-        const value = line.includes(':')
-          ? line.split(':')[1]
-          : line.split('=')[1]
-        event.dtstart = value
-      } else if (line.startsWith('DTEND:') || line.startsWith('DTEND;')) {
-        const value = line.includes(':')
-          ? line.split(':')[1]
-          : line.split('=')[1]
-        event.dtend = value
-      } else if (line.startsWith('SUMMARY:')) {
-        event.summary = this.extractValue(line)
-      } else if (line.startsWith('DESCRIPTION:')) {
-        // Handle multi-line descriptions
-        event.description = this.extractValue(line).replace(/\\n/g, '\n')
-      } else if (line.startsWith('LOCATION:')) {
-        event.location = this.extractValue(line)
+  private static findInHierarchy(
+    node: GroupHierarchy,
+    name: string
+  ): GroupHierarchy | null {
+    if (node.name === name) return node
+    if (node.children) {
+      for (const child of node.children) {
+        const found = this.findInHierarchy(child, name)
+        if (found) return found
       }
     }
+    return null
+  }
 
-    if (!event.uid || !event.dtstart || !event.dtend || !event.summary) {
+  /**
+   * Sorts children in the hierarchy
+   */
+  private static sortHierarchy(node: GroupHierarchy): void {
+    if (node.children && node.children.length > 0) {
+      node.children.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        })
+      )
+      node.children.forEach((child) => this.sortHierarchy(child))
+    }
+  }
+
+  /**
+   * Gets all parent groups for a given group (for hierarchical filtering)
+   */
+  static getParentGroups(
+    groupFullName: string,
+    groups: PromoGroups[]
+  ): string[] {
+    const [promo, ...groupParts] = groupFullName.split(' ')
+    if (groupParts.length === 0) return [groupFullName] // It's just a promo
+
+    const groupName = groupParts.join(' ')
+    const parentGroups: string[] = [groupFullName]
+
+    // Add the promo itself
+    parentGroups.push(promo)
+
+    // Find the promo structure
+    const promoStructure = groups.find((p) => p.promo === promo)
+    if (!promoStructure) return parentGroups
+
+    // Find all ancestors in hierarchy
+    const findAncestors = (
+      node: GroupHierarchy,
+      targetName: string,
+      ancestors: string[] = []
+    ): string[] | null => {
+      if (node.name === targetName) {
+        return ancestors
+      }
+
+      if (node.children) {
+        for (const child of node.children) {
+          const result = findAncestors(child, targetName, [
+            ...ancestors,
+            node.fullName,
+          ])
+          if (result) return result
+        }
+      }
+
       return null
     }
 
-    return event as ICSEvent
-  }
-
-  /**
-   * Checks if event spans multiple days (for allDay detection)
-   */
-  private static isAllDayEvent(start: Date, end: Date): boolean {
-    const diffMs = end.getTime() - start.getTime()
-    const diffHours = diffMs / (1000 * 60 * 60)
-
-    // Consider it all-day if it's 24 hours or more, or starts at midnight
-    return (
-      diffHours >= 24 ||
-      (start.getHours() === 0 && start.getMinutes() === 0 && diffHours > 12)
-    )
-  }
-
-  /**
-   * Maps EventColor based on event content
-   */
-  private static inferColorFromContent(
-    summary: string,
-    description?: string
-  ): EventColor | undefined {
-    const content = `${summary} ${description || ''}`.toLowerCase()
-
-    if (content.includes('férié') || content.includes('holiday')) return 'rose'
-    if (content.includes('exam') || content.includes('test')) return 'orange'
-    if (content.includes('meeting') || content.includes('réunion'))
-      return 'violet'
-    if (content.includes('tp') || content.includes('lab')) return 'emerald'
-
-    return 'blue' // Default color
-  }
-
-  /**
-   * Parses ICS/iCal format data
-   */
-  static parse(icsContent: string): CalendarEvent[] {
-    try {
-      // Unfold lines first
-      const unfoldedContent = this.unfoldLines(icsContent)
-
-      // Extract all VEVENT blocks
-      const eventBlocks =
-        unfoldedContent.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/g) || []
-
-      const events: CalendarEvent[] = []
-
-      for (const block of eventBlocks) {
-        const icsEvent = this.parseVEvent(block)
-        if (!icsEvent) continue
-
-        const startDate = this.parseICSDate(icsEvent.dtstart)
-        const endDate = this.parseICSDate(icsEvent.dtend)
-
-        const calendarEvent: CalendarEvent = {
-          id: icsEvent.uid,
-          allDay: this.isAllDayEvent(startDate, endDate),
-          dateRange: {
-            start: startDate,
-            end: endDate,
-          },
-          title: icsEvent.summary,
-          description: icsEvent.description || '',
-          location: icsEvent.location || '',
-          color: this.inferColorFromContent(
-            icsEvent.summary,
-            icsEvent.description
-          ),
-        }
-
-        // Extract staff from description if present
-        if (icsEvent.description) {
-          const staffMatch = icsEvent.description.match(/Staff:\s*([^\n]+)/i)
-          if (staffMatch) {
-            calendarEvent.staff = staffMatch[1].trim()
-          }
-        }
-
-        events.push(calendarEvent)
-      }
-
-      return events
-    } catch (error) {
-      console.error('Error parsing ICS events:', error)
-      throw new Error(
-        `Failed to parse ICS events: ${error instanceof Error ? error.message : 'Unknown error'}`
-      )
+    const ancestors = findAncestors(promoStructure.hierarchy, groupName)
+    if (ancestors) {
+      parentGroups.push(...ancestors)
     }
+
+    // Also add potential intermediate groups based on naming patterns
+    // E.g., for DV1.1, also include DV1 and DV
+    if (groupName.includes('.')) {
+      const parts = groupName.split('.')
+      for (let i = parts.length - 1; i > 0; i--) {
+        const parentName = parts.slice(0, i).join('.')
+        parentGroups.push(`${promo} ${parentName}`)
+      }
+    }
+
+    // For numbered groups (A1), include base group (A)
+    const baseGroup = groupName.replace(/\d+$/, '')
+    if (baseGroup !== groupName) {
+      parentGroups.push(`${promo} ${baseGroup}`)
+    }
+
+    // For groups like DV1, also include DV
+    const superGroup = groupName.replace(/\d+.*$/, '')
+    if (superGroup !== groupName && superGroup !== baseGroup) {
+      parentGroups.push(`${promo} ${superGroup}`)
+    }
+
+    // Remove duplicates and return
+    return [...new Set(parentGroups)]
   }
 }

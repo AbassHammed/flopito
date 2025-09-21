@@ -7,8 +7,6 @@ import { SpeedInsights } from '@vercel/speed-insights/next'
 import ClientProvider from 'providers/query-client'
 import { ThemeProvider } from 'providers/theme-provider'
 
-import { CalendarProvider } from '~/calendar/calendar-context'
-
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
@@ -41,9 +39,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <ClientProvider>
-            <CalendarProvider>{children}</CalendarProvider>
-          </ClientProvider>
+          <ClientProvider>{children}</ClientProvider>
         </ThemeProvider>
         <SpeedInsights />
       </body>

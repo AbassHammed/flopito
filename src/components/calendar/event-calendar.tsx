@@ -28,6 +28,7 @@ import {
 } from './lib/constants'
 import { JSONEventParser } from 'lib/event-parser'
 import { cn } from 'lib/utils'
+import { useRouterStuff } from 'hooks/use-router-stuff'
 
 import ThemeToggle from '~/theme-toggle'
 import { Button } from '~/ui/button'
@@ -44,7 +45,6 @@ import {
 } from '~/ui/dropdown-menu'
 
 import { AgendaView } from './agenda-view'
-import { useCalendarContext } from './calendar-context'
 import { DayView } from './day-view'
 import { EventDialog } from './event-modal'
 import { MonthView } from './month-view'
@@ -64,12 +64,20 @@ export function EventCalendar({
   className,
   initialView = 'month',
 }: EventCalendarProps) {
+  const { queryParams, searchParams } = useRouterStuff()
   // Use the shared calendar context instead of local state
-  const { currentDate, setCurrentDate } = useCalendarContext()
-  const [view, setView] = useState<CalendarView>(initialView)
+  const [view, setView] = useState<CalendarView>(
+    (searchParams.get('view') as CalendarView) ?? initialView
+  )
   const [isEventDialogOpen, setIsEventDialogOpen] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
-  const [eventFilter, setEventFilter] = useState<string>('BUT1')
+  const [eventFilter, setEventFilter] = useState<string>(
+    searchParams.get('group') ?? 'BUT1'
+  )
+
+  const currentDate = useMemo(() => {
+    return new Date(searchParams.get('cd') ?? Date.now())
+  }, [searchParams])
 
   // Add keyboard shortcuts for view switching
   useEffect(() => {
@@ -88,15 +96,29 @@ export function EventCalendar({
       switch (e.key.toLowerCase()) {
         case 'm':
           setView('month')
+          queryParams({
+            set: { view: 'month' },
+          })
           break
         case 'w':
           setView('week')
+          queryParams({
+            set: { view: 'week' },
+          })
           break
         case 'd':
           setView('day')
+          queryParams({
+            set: { view: 'day' },
+          })
           break
         case 'a':
           setView('agenda')
+          queryParams({
+            set: { view: 'agenda' },
+          })
+          break
+        default:
           break
       }
     }
@@ -106,41 +128,45 @@ export function EventCalendar({
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isEventDialogOpen])
+  }, [isEventDialogOpen, queryParams])
 
   const filteredEvents = useMemo(() => {
     if (!eventFilter) return events
-    return JSONEventParser.filter(events, eventFilter)
+    return JSONEventParser.filter(events, [eventFilter])
   }, [events, eventFilter])
 
   const handlePrevious = () => {
     if (view === 'month') {
-      setCurrentDate(subMonths(currentDate, 1))
+      queryParams({ set: { cd: subMonths(currentDate, 1).toISOString() } })
     } else if (view === 'week') {
-      setCurrentDate(subWeeks(currentDate, 1))
+      queryParams({ set: { cd: subWeeks(currentDate, 1).toISOString() } })
     } else if (view === 'day') {
-      setCurrentDate(addDays(currentDate, -1))
+      queryParams({ set: { cd: addDays(currentDate, -1).toISOString() } })
     } else if (view === 'agenda') {
       // For agenda view, go back 30 days (a full month)
-      setCurrentDate(addDays(currentDate, -AgendaDaysToShow))
+      queryParams({
+        set: { cd: addDays(currentDate, AgendaDaysToShow).toISOString() },
+      })
     }
   }
 
   const handleNext = () => {
     if (view === 'month') {
-      setCurrentDate(addMonths(currentDate, 1))
+      queryParams({ set: { cd: addMonths(currentDate, 1).toISOString() } })
     } else if (view === 'week') {
-      setCurrentDate(addWeeks(currentDate, 1))
+      queryParams({ set: { cd: addWeeks(currentDate, 1).toISOString() } })
     } else if (view === 'day') {
-      setCurrentDate(addDays(currentDate, 1))
+      queryParams({ set: { cd: addDays(currentDate, 1).toISOString() } })
     } else if (view === 'agenda') {
+      queryParams({
+        set: { cd: addDays(currentDate, AgendaDaysToShow).toISOString() },
+      })
       // For agenda view, go forward 30 days (a full month)
-      setCurrentDate(addDays(currentDate, AgendaDaysToShow))
     }
   }
 
   const handleToday = () => {
-    setCurrentDate(new Date())
+    queryParams({ set: { cd: new Date().toISOString() } })
   }
 
   const handleEventSelect = (event: CalendarEvent) => {
@@ -261,10 +287,13 @@ export function EventCalendar({
                     </DropdownMenuSubTrigger>
                     <DropdownMenuPortal>
                       <DropdownMenuSubContent>
-                        {group.groups.map((subgroup) => (
+                        {group.hierarchy.children?.map((subgroup) => (
                           <DropdownMenuItem
                             key={subgroup.id}
-                            onClick={() => setEventFilter(subgroup.name)}
+                            onClick={() => {
+                              setEventFilter(subgroup.name)
+                              queryParams({ set: { group: subgroup.name } })
+                            }}
                           >
                             {subgroup.name}
                           </DropdownMenuItem>
@@ -290,16 +319,36 @@ export function EventCalendar({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-32">
-                <DropdownMenuItem onClick={() => setView('month')}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setView('month')
+                    queryParams({ set: { view: 'month' } })
+                  }}
+                >
                   Mois <DropdownMenuShortcut>M</DropdownMenuShortcut>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setView('week')}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setView('week')
+                    queryParams({ set: { view: 'week' } })
+                  }}
+                >
                   Semaine <DropdownMenuShortcut>W</DropdownMenuShortcut>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setView('day')}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setView('day')
+                    queryParams({ set: { view: 'day' } })
+                  }}
+                >
                   Jour <DropdownMenuShortcut>D</DropdownMenuShortcut>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setView('agenda')}>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setView('agenda')
+                    queryParams({ set: { view: 'agenda' } })
+                  }}
+                >
                   Agenda <DropdownMenuShortcut>A</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </DropdownMenuContent>

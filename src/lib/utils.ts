@@ -56,9 +56,9 @@ export function getDayDate(
   year: number
 ): Date {
   const dayMap: Record<string, number> = {
-    mo: 1,
+    m: 1,
     tu: 2,
-    we: 3,
+    w: 3,
     th: 4,
     fr: 5,
     f: 5,
